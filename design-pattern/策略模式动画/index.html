@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>策略模式动画</title>
+  <style>
+    #bar {
+      position: absolute;
+      background: red;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 100px;
+      color: aqua;
+    }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    我是小球
+  </div>
+  <script src="./index.js"></script>
+  <script>
+    var bar = document.getElementById('bar');
+    var animate = new Animate(bar);
+    animate.start('left', 500, 1000, 'linear');
+    // animate.start('top', 200, 1000, 'linear');
+  </script>
+</body>
+</html>
