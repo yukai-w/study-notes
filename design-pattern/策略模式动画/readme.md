@@ -158,4 +158,4 @@ Animate.prototype.update = function(pos) {
 }
 
 ```
-> 源码地址: 
+> 源码地址: [github](https://github.com/yukai-w/study-notes/blob/master/design-pattern/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F%E5%8A%A8%E7%94%BB/index.js)
