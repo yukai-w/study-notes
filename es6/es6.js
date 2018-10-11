@@ -27,4 +27,14 @@ let str = 'sdf';
 str.indexOf('s'); // es5
 str.includes('s'); // es6  =>  true / false
 
+str.startsWith('s'); // true / false
+str.endsWith('d');
+
+str.repeat(2); // sdfsdf
+
+let str1 = `ff${str}ff
+      ddddd`;
+
+// arr
+let arr = [1,2,3];
 
