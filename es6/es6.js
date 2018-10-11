@@ -13,6 +13,18 @@ s.forEach(function(item, index, set) {
 
 });
 
-s.keys(); // return keys itetor
+s.keys(); // return keys iterator
+
+
+// map
+
+
+
+// class 类  
+
+// str
+let str = 'sdf';
+str.indexOf('s'); // es5
+str.includes('s'); // es6  =>  true / false
 
 
