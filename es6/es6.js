@@ -37,4 +37,12 @@ let str1 = `ff${str}ff
 
 // arr
 let arr = [1,2,3];
+Array.of(1,2,3);
+Array.from(document.getElementsByClassName('ss'));
+arr.find(item => item > 1);
 
+// promise
+let pro = new Promise((resolve, reject) => {
+    resolve('ddd');
+});
+pro.then(s => console.log(s)) // 'ddd'
