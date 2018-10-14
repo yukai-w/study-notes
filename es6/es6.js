@@ -46,3 +46,4 @@ let pro = new Promise((resolve, reject) => {
     resolve('ddd');
 });
 pro.then(s => console.log(s)) // 'ddd'
+
