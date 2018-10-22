@@ -193,4 +193,254 @@ ReactElement.createElement = function(type, config, children) {
 - 当node类型为字符串或数字时, 则初始化文本组件 ReactNativeComponent.createInstanceForText(node);
 - 其他情况不做处理
 
+相关代码：
+```javascript
+/**
+ * Given a ReactNode, create an instance that will actually be mounted.
+ *
+ * @param {ReactNode} node
+ * @return {object} A new instance of the element's constructor.
+ * @protected
+ */
+function instantiateReactComponent(node) {
+  var instance;
+
+  // 空组件
+  if (node === null || node === false) {
+    instance = ReactEmptyComponent.create(instantiateReactComponent);
+  } else if (typeof node === 'object') {
+    var element = node;
+    invariant(
+      element && (typeof element.type === 'function' ||
+                  typeof element.type === 'string'),
+      'Element type is invalid: expected a string (for built-in components) ' +
+      'or a class/function (for composite components) but got: %s.%s',
+      element.type == null ? element.type : typeof element.type,
+      getDeclarationErrorAddendum(element._owner)
+    );
+
+    // Special case string values
+    if (typeof element.type === 'string') {
+      // dom标签
+      instance = ReactNativeComponent.createInternalComponent(element);
+    } else if (isInternalComponentType(element.type)) {
+      // This is temporarily available for custom components that are not string
+      // representations. I.e. ART. Once those are updated to use the string
+      // representation, we can drop this code path.
+      // 不是字符串表示的自定义组件暂无法使用， 此处将不做初始化操作
+      instance = new element.type(element);
+    } else {
+      // 自定义组件
+      instance = new ReactCompositeComponentWrapper(element);
+    }
+  } else if (typeof node === 'string' || typeof node === 'number') {
+    // 字符串或者数字
+    instance = ReactNativeComponent.createInstanceForText(node);
+  } else {
+    invariant(
+      false,
+      'Encountered invalid React node of type %s',
+      typeof node
+    );
+  }
+
+  if (__DEV__) {
+    warning(
+      typeof instance.mountComponent === 'function' &&
+      typeof instance.receiveComponent === 'function' &&
+      typeof instance.getNativeNode === 'function' &&
+      typeof instance.unmountComponent === 'function',
+      'Only React Components can be mounted.'
+    );
+  }
+
+  // These two fields are used by the DOM and ART diffing algorithms
+  // respectively. Instead of using expandos on components, we should be
+  // storing the state needed by the diffing algorithms elsewhere.
+  // 初始化参数
+  instance._mountIndex = 0;
+  instance._mountImage = null;
+
+  if (__DEV__) {
+    instance._isOwnerNecessary = false;
+    instance._warnedAboutRefsInRender = false;
+  }
+
+  // Internal instances should fully constructed at this point, so they should
+  // not get any new fields added to them at this point.
+  if (__DEV__) {
+    if (Object.preventExtensions) {
+      Object.preventExtensions(instance);
+    }
+  }
+
+  return instance;
+}
+```
+
+### 文本组件
+
+在执行mountComponent方式时， ReactDOMTextComponent通过transaction.useCreateElement判断是否通过createElement方式创建的节点， 如果是， 则添加domID拥有diff权力，如果不是，则直接返回文本内容。
+
+相关代码：
+```javascript
+var ReactDOMTextComponent = function(text) {
+  // TODO: This is really a ReactText (ReactNode), not a ReactElement
+  // 保存当前字符串
+  this._currentElement = text;
+  this._stringText = '' + text;
+  // ReactDOMComponentTree uses these:
+  this._nativeNode = null;
+  this._nativeParent = null;
+
+  // Properties
+  this._domID = null;
+  this._mountIndex = 0;
+  this._closingComment = null;
+  this._commentNodes = null;
+};
+
+assign(ReactDOMTextComponent.prototype, {
+
+  /**
+   * Creates the markup for this text node. This node is not intended to have
+   * any features besides containing text content.
+   *
+   * @param {ReactReconcileTransaction|ReactServerRenderingTransaction} transaction
+   * @return {string} Markup for this text node.
+   * @internal
+   */
+  mountComponent: function(
+    transaction,
+    nativeParent,
+    nativeContainerInfo,
+    context
+  ) {
+    if (__DEV__) {
+      var parentInfo;
+      if (nativeParent != null) {
+        parentInfo = nativeParent._ancestorInfo;
+      } else if (nativeContainerInfo != null) {
+        parentInfo = nativeContainerInfo._ancestorInfo;
+      }
+      if (parentInfo) {
+        // parentInfo should always be present except for the top-level
+        // component when server rendering
+        validateDOMNesting('#text', this, parentInfo);
+      }
+    }
+
+    var domID = nativeContainerInfo._idCounter++;
+    var openingValue = ' react-text: ' + domID + ' ';
+    var closingValue = ' /react-text ';
+    this._domID = domID;
+    this._nativeParent = nativeParent;
+
+    // 如果是createElement 则会加上标签和domID
+    if (transaction.useCreateElement) {
+      var ownerDocument = nativeContainerInfo._ownerDocument;
+      var openingComment = ownerDocument.createComment(openingValue);
+      var closingComment = ownerDocument.createComment(closingValue);
+      var lazyTree = DOMLazyTree(ownerDocument.createDocumentFragment());
+      // 开始标签
+      DOMLazyTree.queueChild(lazyTree, DOMLazyTree(openingComment));
+      // 如果是文本类型，则创建文本节点
+      if (this._stringText) {
+        DOMLazyTree.queueChild(
+          lazyTree,
+          DOMLazyTree(ownerDocument.createTextNode(this._stringText))
+        );
+      }
+      DOMLazyTree.queueChild(lazyTree, DOMLazyTree(closingComment));
+      ReactDOMComponentTree.precacheNode(this, openingComment);
+      this._closingComment = closingComment;
+      return lazyTree;
+    } else {
+      var escapedText = escapeTextContentForBrowser(this._stringText);
+
+      // 静态页面下直接返回文本节点
+      if (transaction.renderToStaticMarkup) {
+        // Normally we'd wrap this between comment nodes for the reasons stated
+        // above, but since this is a situation where React won't take over
+        // (static pages), we can simply return the text as it is.
+        return escapedText;
+      }
+
+      return (
+        '<!--' + openingValue + '-->' + escapedText +
+        '<!--' + closingValue + '-->'
+      );
+    }
+  },
+
+  /**
+   * Updates this component by updating the text content.
+   *
+   * @param {ReactText} nextText The next text content
+   * @param {ReactReconcileTransaction} transaction
+   * @internal
+   */
+  // 更新文本内容
+  receiveComponent: function(nextText, transaction) {
+    if (nextText !== this._currentElement) {
+      this._currentElement = nextText;
+      var nextStringText = '' + nextText;
+      if (nextStringText !== this._stringText) {
+        // TODO: Save this as pending props and use performUpdateIfNecessary
+        // and/or updateComponent to do the actual update for consistency with
+        // other component types?
+        this._stringText = nextStringText;
+        var commentNodes = this.getNativeNode();
+        DOMChildrenOperations.replaceDelimitedText(
+          commentNodes[0],
+          commentNodes[1],
+          nextStringText
+        );
+      }
+    }
+  },
+
+  getNativeNode: function() {
+    var nativeNode = this._commentNodes;
+    if (nativeNode) {
+      return nativeNode;
+    }
+    if (!this._closingComment) {
+      var openingComment = ReactDOMComponentTree.getNodeFromInstance(this);
+      var node = openingComment.nextSibling;
+      while (true) {
+        invariant(
+          node != null,
+          'Missing closing comment for text component %s',
+          this._domID
+        );
+        if (node.nodeType === 8 && node.nodeValue === ' /react-text ') {
+          this._closingComment = node;
+          break;
+        }
+        node = node.nextSibling;
+      }
+    }
+    nativeNode = [this._nativeNode, this._closingComment];
+    this._commentNodes = nativeNode;
+    return nativeNode;
+  },
+
+  unmountComponent: function() {
+    this._closingComment = null;
+    this._commentNodes = null;
+    ReactDOMComponentTree.uncacheNode(this);
+  },
+
+});
+```
+
+### DOM标签组件
+
+React的处理并不是直接操作和污染原生DOM，这样不仅保持了性能上的高校和稳定，而且降低了直接操作原生DOM而导致错误的风险。
+
+ReactDOMComponent针对Virtual DOM 标签的处理主要分为以下两个部分：
+- 属性的更新，包括样式、更新属性、处理事件等；
+- 子节点的更新，包括更新内容、更新子节点，此部分涉及diff算法。
+
 
