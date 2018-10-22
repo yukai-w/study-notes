@@ -193,3 +193,4 @@ ReactElement.createElement = function(type, config, children) {
 - 当node类型为字符串或数字时, 则初始化文本组件 ReactNativeComponent.createInstanceForText(node);
 - 其他情况不做处理
 
+
