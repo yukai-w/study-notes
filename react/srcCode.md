@@ -725,3 +725,5 @@ unmountComponent负责管理生命周期中的componentWillUnmount
 
 ## 解密setState机制
 
+setState通过一个队列机制实现state更新, 当执行setState时, 会将需要更新的state合并后放入状态队列, 而不会立刻更新this.state.
+
