@@ -443,4 +443,165 @@ ReactDOMComponent针对Virtual DOM 标签的处理主要分为以下两个部分
 - 属性的更新，包括样式、更新属性、处理事件等；
 - 子节点的更新，包括更新内容、更新子节点，此部分涉及diff算法。
 
+#### 更新属性
 
+初始化:
+- 如果存在事件, 则针对当前节点添加事件代理
+- 如果存在样式, 首先会对样式进行合并操作`Object.assign({}, props.style), 然后创建样式
+- 然后创建属性
+- 最后创建唯一标识
+
+更新操作:
+- 先删除不需要的旧属性.
+  - 如果不需要旧样式, 则遍历旧样式集合, 并对每个样式进行置空删除
+  - 如果不需要事件, 则将其事件监听的属性去掉, 及取消事件代理
+- 更新新属性
+  - 如果存在新样式, 则将新样式进行合并
+  - 如果在旧样式中但不在新样式中, 则清除该样式
+  - 如果既在旧样式中也在新样式中, 且不相同, 则更新该样式`styleUpdates[styleName] = nextProp[styleName]`
+  - 如果存在信阳市中, 但不在旧样式中, 则直接更新为新样式
+  - 如果存在事件更新, 则添加事件监听的属性
+  - 如果存在新属性, 则添加新属性或者更新旧的同名属性
+
+相关代码:
+```javascript
+_updateDOMProperties: function(lastProps, nextProps, transaction) {
+    var propKey;
+    var styleName;
+    var styleUpdates;
+    for (propKey in lastProps) {
+      if (nextProps.hasOwnProperty(propKey) ||
+         !lastProps.hasOwnProperty(propKey) ||
+         lastProps[propKey] == null) {
+        continue;
+      }
+      // 从DOM上删除不需要的样式
+      if (propKey === STYLE) {
+        var lastStyle = this._previousStyleCopy;
+        for (styleName in lastStyle) {
+          if (lastStyle.hasOwnProperty(styleName)) {
+            styleUpdates = styleUpdates || {};
+            styleUpdates[styleName] = '';
+          }
+        }
+        this._previousStyleCopy = null;
+      } else if (registrationNameModules.hasOwnProperty(propKey)) {
+        if (lastProps[propKey]) {
+          // Only call deleteListener if there was a listener previously or
+          // else willDeleteListener gets called when there wasn't actually a
+          // listener (e.g., onClick={null})
+          // 取消事件监听
+          deleteListener(this, propKey);
+        }
+      } else if (this._namespaceURI === DOMNamespaces.svg) {
+        // 从 DOM 上删除不需要的属性 svg
+        DOMPropertyOperations.deleteValueForSVGAttribute(
+          getNode(this),
+          propKey
+        );
+      } else if (
+        // 从 DOM 上删除不需要的属性 
+          DOMProperty.properties[propKey] ||
+          DOMProperty.isCustomAttribute(propKey)) {
+        DOMPropertyOperations.deleteValueForProperty(getNode(this), propKey);
+      }
+    }
+    for (propKey in nextProps) {
+      var nextProp = nextProps[propKey];
+      var lastProp =
+        propKey === STYLE ? this._previousStyleCopy :
+        lastProps != null ? lastProps[propKey] : undefined;
+      // 不在新属性中 或与旧属性相同 则跳过
+      if (!nextProps.hasOwnProperty(propKey) ||
+          nextProp === lastProp ||
+          nextProp == null && lastProp == null) {
+        continue;
+      }
+      // 在DOM 上写入新样式
+      if (propKey === STYLE) {
+        if (nextProp) {
+          if (__DEV__) {
+            checkAndWarnForMutatedStyle(
+              this._previousStyleCopy,
+              this._previousStyle,
+              this
+            );
+            this._previousStyle = nextProp;
+          }
+          nextProp = this._previousStyleCopy = assign({}, nextProp);
+        } else {
+          this._previousStyleCopy = null;
+        }
+        if (lastProp) {
+          // Unset styles on `lastProp` but not on `nextProp`.
+          // 在旧样式中且不在新样式中, 清除该样式
+          for (styleName in lastProp) {
+            if (lastProp.hasOwnProperty(styleName) &&
+                (!nextProp || !nextProp.hasOwnProperty(styleName))) {
+              styleUpdates = styleUpdates || {};
+              styleUpdates[styleName] = '';
+            }
+          }
+          // Update styles that changed since `lastProp`.
+          // 既在就样式中也在新样式中 且不相同
+          for (styleName in nextProp) {
+            if (nextProp.hasOwnProperty(styleName) &&
+                lastProp[styleName] !== nextProp[styleName]) {
+              styleUpdates = styleUpdates || {};
+              styleUpdates[styleName] = nextProp[styleName];
+            }
+          }
+        } else {
+          // Relies on `updateStylesByID` not mutating `styleUpdates`.
+          // 不存在旧样式 直接写入新样式
+          styleUpdates = nextProp;
+        }
+      } else if (registrationNameModules.hasOwnProperty(propKey)) {
+        if (nextProp) {
+          // 添加事件监听
+          enqueuePutListener(this, propKey, nextProp, transaction);
+        } else if (lastProp) {
+          deleteListener(this, propKey);
+        }
+      } else if (isCustomComponent(this._tag, nextProps)) {
+        if (!RESERVED_PROPS.hasOwnProperty(propKey)) {
+          // 更新新属性
+          DOMPropertyOperations.setValueForAttribute(
+            getNode(this),
+            propKey,
+            nextProp
+          );
+        }
+      } else if (this._namespaceURI === DOMNamespaces.svg) {
+        if (!RESERVED_PROPS.hasOwnProperty(propKey)) {
+          DOMPropertyOperations.setValueForSVGAttribute(
+            getNode(this),
+            propKey,
+            nextProp
+          );
+        }
+      } else if (
+          DOMProperty.properties[propKey] ||
+          DOMProperty.isCustomAttribute(propKey)) {
+        var node = getNode(this);
+        // If we're updating to null or undefined, we should remove the property
+        // from the DOM node instead of inadvertently setting to a string. This
+        // brings us in line with the same behavior we have on initial render.
+        if (nextProp != null) {
+          // 如果属性不为空, 设置属性
+          DOMPropertyOperations.setValueForProperty(node, propKey, nextProp);
+        } else {
+          // 如果属性为空, 则删除该属性
+          DOMPropertyOperations.deleteValueForProperty(node, propKey);
+        }
+      }
+    }
+    if (styleUpdates) {
+      CSSPropertyOperations.setValueForStyles(
+        getNode(this),
+        styleUpdates,
+        this
+      );
+    }
+  },
+```
