@@ -605,3 +605,123 @@ _updateDOMProperties: function(lastProps, nextProps, transaction) {
     }
   },
 ```
+
+#### 更新子节点
+
+首先, 获取节点内容 props.dangerouslySetInnerHTML. 如果存在子节点, 则对子节点进行初始化渲染.
+
+```javascript
+  _createInitialChildren: function(transaction, props, context, lazyTree) {
+    // Intentional use of != to avoid catching zero/false.
+    // 获取dangerouslySetInnerHTML
+    var innerHTML = props.dangerouslySetInnerHTML;
+    if (innerHTML != null) {
+      if (innerHTML.__html != null) {
+        DOMLazyTree.queueHTML(lazyTree, innerHTML.__html);
+      }
+    } else {
+      var contentToUse =
+        CONTENT_TYPES[typeof props.children] ? props.children : null;
+      var childrenToUse = contentToUse != null ? null : props.children;
+      if (contentToUse != null) {
+        // TODO: Validate that text is allowed as a child of this node
+        DOMLazyTree.queueText(lazyTree, contentToUse);
+      } else if (childrenToUse != null) {
+        // 对子节点开始渲染
+        var mountImages = this.mountChildren(
+          childrenToUse,
+          transaction,
+          context
+        );
+        for (var i = 0; i < mountImages.length; i++) {
+          DOMLazyTree.queueChild(lazyTree, mountImages[i]);
+        }
+      }
+    }
+  },
+```
+
+当执行receiveComponent方式时, ReactDOMComponent会更新DOM内容和子节点:
+- 先删除不需要的子节点和内容.
+  - 如果旧节点存在, 而新节点不存在, 说明当前节点在更新后被删除, 此时执行this.updateChildren(null, transaction, context)
+  - 如果旧的内容存在, 而新的不存在, 说明当前内容在更新后被删除, 执行方法this.updateTextContent('')
+- 再是更新子节点和内容
+  - 如果新子节点存在, 则更新其子节点
+  - 如果新内容存在, 则更新内容
+
+相关代码:
+```javascript
+_updateDOMChildren: function(lastProps, nextProps, transaction, context) {
+  // 初始化
+  var lastContent =
+    CONTENT_TYPES[typeof lastProps.children] ? lastProps.children : null;
+  var nextContent =
+    CONTENT_TYPES[typeof nextProps.children] ? nextProps.children : null;
+
+  var lastHtml =
+    lastProps.dangerouslySetInnerHTML &&
+    lastProps.dangerouslySetInnerHTML.__html;
+  var nextHtml =
+    nextProps.dangerouslySetInnerHTML &&
+    nextProps.dangerouslySetInnerHTML.__html;
+
+  // Note the use of `!=` which checks for null or undefined.
+  var lastChildren = lastContent != null ? null : lastProps.children;
+  var nextChildren = nextContent != null ? null : nextProps.children;
+
+  // If we're switching from children to content/html or vice versa, remove
+  // the old content
+  var lastHasContentOrHtml = lastContent != null || lastHtml != null;
+  var nextHasContentOrHtml = nextContent != null || nextHtml != null;
+  if (lastChildren != null && nextChildren == null) {
+    // 旧节点存在, 而新节点不存在, 说明当前节点更新后被删除了
+    this.updateChildren(null, transaction, context);
+  } else if (lastHasContentOrHtml && !nextHasContentOrHtml) {
+    // 内容更新后被删除了
+    this.updateTextContent('');
+  }
+
+  // 新节点存在
+  if (nextContent != null) {
+    if (lastContent !== nextContent) {
+      this.updateTextContent('' + nextContent);
+    }
+  } else if (nextHtml != null) {
+    if (lastHtml !== nextHtml) {
+      this.updateMarkup('' + nextHtml);
+    }
+  } else if (nextChildren != null) {
+    // 更新子节点
+    this.updateChildren(nextChildren, transaction, context);
+  }
+},
+```
+
+## 生命周期管理艺术
+
+React主要思想是通过构建可复用组件来构建用户界面. 所谓组件, 其实就是`有限状态机(FSM)`. 就是表示有限个状态以及在这些状态之间的转移和动作等行为的模型.
+
+组件的生命周期在不同状态下的执行顺序:
+- 当首次挂载组件时, 按顺序执行`getDefaultProps`, `getInitialState`, `componentWillMount`, `render`和`componentDidMount`;
+- 当卸载组件时, 执行`componentWillUnmount`;
+- 当重新挂载组件时, 此时按顺序执行`getInitialState`, `componentWillMount`, `render`和`componentDidMount`, 但不执行`getDefaultProps`;
+- 当再次渲染组件时, 组件接收到更新状态, 此时按顺序执行`componentWillReceiveProps`, `shouldComponentUpdate`, `componentWillUpdate`, `render`和`componentDidUpdate`.
+
+### 阶段一: MOUNTING
+
+mountComponent负责管理生命周期中的getInitialState, componentWillMount, render和componentDidMount
+
+> 其实, mountComponent本质上是通过`递归`渲染内容的, 由于递归的特性, **父组件的componentWillMount在子组件componentWillMount之前, 而父组件的componentDidMount再其子组件的componentDidMount之后调用**
+
+### 阶段二: RECEIVE_PROPS
+
+updateComponent 负责管理生命周期中的`componengWillReceiveProps`, `shouldComponentUpdate`, `componentWillUpdate`, `render`和`componentDidUpdate`.
+
+> updateComponent 也是通过递归渲染
+
+### 阶段三: UNMOUNTING
+
+unmountComponent负责管理生命周期中的componentWillUnmount
+
+## 解密setState机制
+
