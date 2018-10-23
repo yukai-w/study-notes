@@ -727,3 +727,54 @@ unmountComponent负责管理生命周期中的componentWillUnmount
 
 setState通过一个队列机制实现state更新, 当执行setState时, 会将需要更新的state合并后放入状态队列, 而不会立刻更新this.state.
 
+### setState 调用战
+
+setState最终是通过enqueueUpdate执行state更新。
+
+```javascript
+import React, { Component } from 'react';
+
+class Example extends Component {
+  constructor() {
+    super();
+    this.state = {
+      val: 0,
+    };
+  }
+
+  componentWillMount() {
+    this.setState({ val: this.state.val + 1 });
+    console.log(this.state.val); // 第1次输出
+
+    this.setState({ val: this.state.val + 1 });
+    console.log(this.state.val); // 第2次输出
+
+    setTimeout(() => {
+      this.setState({ val: this.state.val + 1 });
+      console.log(this.state.val); // 第3次输出
+
+      this.setState({ val: this.state.val + 1 });
+      console.log(this.state.val); // 第4次输出
+    })
+  }
+
+  render() {
+    return null;
+  }
+
+  // 输出 0  0  2  3
+}
+```
+
+为什么？？？？？？？
+
+```flow
+st=>start: this.setState(newState)
+e=>end: 登录 
+         ||
+`newState`存入pending队列
+         ||
+调用`enqueueUpdate`
+```
+<div style="width: 100px;height:100px;background: red;border-radius:50px;"></div>
+
