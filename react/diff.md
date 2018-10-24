@@ -28,3 +28,22 @@ React将Virtual DOM树转换成actual DOM树的最少操作的过程称为`调�
 
 > 在开发组件的时候, 保持稳定的DOM结构会有助于性能的提升. 例如: 可以通过css隐藏或显示节点, 而不是真正地移除或添加DOM节点.
 
+### component diff
+
+React是基于组件构建应用的, 对于组件间的比较所采取的策略也是非常简洁,搞笑的:
+- 如果是同一类型的组件, 按照原策略继续比较Virtual DOM树即可;
+- 如果不是, 则将该组件判断为dirty component, 从而替换整个组件下的所有子节点;
+- 对于同一类型的组件, 有可能其Virtual DOM没有任何变化, 如果能够确切知道这点, 那么就可以节省大量的diff运算时间. 因此, React允许用户通过shouldComponentUpdate()来判断该组件是否需要进行diff算法分析.
+
+### element diff
+
+当节点出于同一层时, diff提供了3种节点操作, 分别为`INSERT_MARKUP(插入)`, `MOVE_EXISTING(移动)`和`REMOVE_NODE(删除)`.
+- 插入: 新的组件类型不在旧集合里, 即全新的节点, 需要对新节点执行插入操作.
+- 移动: 旧集合中有新组件类型, 且element是可更新的类型, 这种情况下prevChild=nextChild, 就需要做移动操作, 可以复用以前的DOM节点.
+- 删除: 旧组件类型, 在新集合里也有, 但对应的element不同则不能直接复用和更新, 需要执行删除操作, 或者旧组件不在新集合里的, 也需要执行删除操作.
+
+> 在移动前需要将当前节点在旧集合中的位置与lastIndex进行比较`if(child._mountIndex < lastIndex)`, 否则不执行该操作.这是一种顺序优化手段.
+
+## React Patch 方法
+
+所谓Patch, 简而言之就是将tree diff计算出来的DOM差异队列更新到真实的DOM节点上, 最终让浏览器能够渲染出更新的数据.
