@@ -807,3 +807,10 @@ e=>end: 登录
  * </pre>
 ```
 
+首先对前面的4次setState简单归类:
+- 前两个归为一类, 因为它们在同义词调用栈中执行;
+- 定时器中的两个属于另外一类.
+
+> 在componentDidMount中的setState调用前, 已经处于`batchedUpdates`执行的**事物**中了.
+
+那batchedUpdates方式, 又是谁调用的呢? 是ReactMount.js中的_renderNewRootComponent方法. 也就是说, 整个将React组建渲染到DOM中的过程就处于一个大的事物中.
