@@ -37,4 +37,14 @@ webpackconfig = {
 - 窗口打印更直接
 
 上线阶段
-- es6 不需要编译 
+- es6 不需要编译 polyfill io
+- 前端缓存小负载 webapp-manifest-plugin
+- 真正的loading
+- 单页 问题 多页转单页
+- 分析打包结果 CI
+- test exclude include 重要
+- 压缩js css happypack ts-loader  nano  optimize-css-assets-webpack-plugin
+- devtool eval
+- cache-loader
+
+### loader
