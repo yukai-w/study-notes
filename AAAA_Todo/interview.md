@@ -14,4 +14,8 @@
 - git flow
 - 函数科里化
 - commonJs UMD CMD， es6模块化跟他们的区别
-- 
+- react vue 区别 新特性
+- getBoundingClientRect获取的top和offsetTop获取的top区别
+- xss,CSRF,点击劫持，Cookie安全，HTTP窃听篡改，密码安全，SQL注入
+- 数组去重
+
