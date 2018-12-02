@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+        .content {
+            background: red;
+            height: 1500px;
+            transition-duration: 1s;
+        }
+        .header {
+            color: black;
+            line-height: 200px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 100px;
+        }
+        .hide {
+            transition-duration: 1s;
+            animation: hide 2s ease-in;
+            animation-iteration-count: 1;
+            animation-fill-mode: forwards;
+        }
+        @keyframes hide {
+            from {
+                height: 200px;
+                line-height: 200px;
+                font-size: 100px;
+            }
+            to {
+                height: 0;
+                line-height: 0px;
+                font-size: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <header class="header">头部</header>
+        <div class="content">
+            内容
+        </div>
+    </div>
+    <script>
+        const root = document.getElementById('root');
+        const header = document.getElementsByClassName('header')[0];
+        window.addEventListener('scroll', () => {
+            const top = document.documentElement.scrollTop;
+            console.log(top);
+            if (top > 100) {
+                if (header.className.indexOf('hide') === -1){
+                    header.className += ' hide';
+                }
+            }
+        })
+    </script>
+</body>
+</html>
